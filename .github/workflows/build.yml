@@ -80,12 +80,12 @@ jobs:
                       targetSdk = 35
                   }
                   compileOptions {
-                      sourceCompatibility = JavaVersion.VERSION_1_8
-                      targetCompatibility = JavaVersion.VERSION_1_8
+                      sourceCompatibility = JavaVersion.VERSION_17
+                      targetCompatibility = JavaVersion.VERSION_17
                   }
                   tasks.withType<KotlinJvmCompile> {
                       compilerOptions {
-                          jvmTarget.set(JvmTarget.JVM_1_8)
+                          jvmTarget.set(JvmTarget.JVM_17)
                           freeCompilerArgs.addAll(
                               "-Xno-call-assertions",
                               "-Xno-param-assertions",
@@ -131,7 +131,6 @@ jobs:
           import com.lagradost.cloudstream3.*
           import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
           import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
-          import com.lagradost.cloudstream3.LoadResponse.Companion.addTmdbId
           import com.lagradost.cloudstream3.network.WebViewResolver
           import com.lagradost.cloudstream3.plugins.BasePlugin
           import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
@@ -388,7 +387,6 @@ jobs:
                           this.tags = genreTags.distinct()
                           this.duration = durationMinutes
                           addActors(castList)
-                          addTmdbId(detail.tmdb?.id?.toString())
                           addImdbId(detail.imdb?.id)
                       }
                   } else {
@@ -445,7 +443,6 @@ jobs:
                           this.duration = durationMinutes
                           this.showStatus = parseShowStatus(detail.currentEpisode, detail.totalEpisodes)
                           addActors(castList)
-                          addTmdbId(detail.tmdb?.id?.toString())
                           addImdbId(detail.imdb?.id)
                       }
                   }
@@ -594,9 +591,10 @@ jobs:
                       this.otherName = originalName
                       this.quality = getQualityFromString(this@toSearchResult.quality)
                       addDubStatus(
-                          isDub = isDubbed,
-                          isSub = isSubbed,
-                          episodes = currentEpNum
+                          dubExist = isDubbed,
+                          subExist = isSubbed,
+                          dubEpisodes = if (isDubbed) currentEpNum else null,
+                          subEpisodes = if (isSubbed) currentEpNum else null
                       )
                   }
               }
