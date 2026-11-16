@@ -1,5 +1,28 @@
 [
     {
+        "iconUrl": "https://phimapi.com/assets/images/logo.png",
+        "fileHash": "sha256-e4ef021842830dad7cfbd02213bc068974d7e137e9245eec9b5bf5e5f7616673",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nguyenvanlong-ai/NguonCPlugin",
+        "fileSize": 40899,
+        "status": 1,
+        "language": "vi",
+        "authors": [
+            "KKPhim"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AsianDrama"
+        ],
+        "version": 1,
+        "internalName": "KKPhimProvider",
+        "description": "Xem phim Vietsub, Thuyet Minh, Long Tieng chat luong FHD tu KKPhim (phimapi.com)",
+        "url": "https://raw.githubusercontent.com/nguyenvanlong-ai/NguonCPlugin/builds/KKPhimProvider.cs3",
+        "name": "KKPhimProvider"
+    },
+    {
         "iconUrl": "https://img.nguonc.com/images/img-6f4dad12be11077f1fd5ff0bc0c4f8d72b9708c882e65dc1bdbad6bac79e1455.png",
         "fileHash": "sha256-385ec11ce25af62f1bea39b92c52ca4a373c245bba15117b49822ccb0fb8815f",
         "apiVersion": 1,
