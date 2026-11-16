@@ -1,0 +1,25 @@
+[
+    {
+        "iconUrl": "https://img.nguonc.com/images/img-6f4dad12be11077f1fd5ff0bc0c4f8d72b9708c882e65dc1bdbad6bac79e1455.png",
+        "fileHash": "sha256-4222eb59bdca1c3e73b592bce10a09273fcad3a238c5754eaf0f981694637ecb",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/nguyenvanlong-ai/NguonCPlugin",
+        "fileSize": 45634,
+        "status": 1,
+        "language": "vi",
+        "authors": [
+            "NguonC"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AsianDrama"
+        ],
+        "version": 1,
+        "internalName": "NguonCProvider",
+        "description": "Xem phim Vietsub, Thuyet Minh, Long Tieng toc do cao tu NguonC (phim.nguonc.com)",
+        "url": "https://raw.githubusercontent.com/nguyenvanlong-ai/NguonCPlugin/builds/NguonCProvider.cs3",
+        "name": "NguonCProvider"
+    }
+]
