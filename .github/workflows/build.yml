@@ -1,15 +1,12 @@
 name: Build CloudStream Plugin
-
 on:
   push:
     branches:
       - main
       - master
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,187 +15,669 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Bootstrap project files if needed
+      - name: Generate project files
         run: |
-          python3 - <<'PY'
-          import base64, gzip, json
-          from pathlib import Path
-
-          B64_DATA = """
-            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
-            38DoAd9GHVyFy+klH6vOHP0fnBq22BaQAAA=
-          """
-          raw = gzip.decompress(base64.b64decode(B64_DATA)).decode("utf-8")
-          data = json.loads(raw)
-          changed = False
-          for rel_path, text in data.items():
-              p = Path(rel_path)
-              content = text.encode("utf-8")
-              if not p.exists() or p.read_bytes() != content:
-                  p.parent.mkdir(parents=True, exist_ok=True)
-                  p.write_bytes(content)
-                  changed = True
-          if changed:
-              print("Project files bootstrapped:", len(data))
-          PY
+          mkdir -p NguonCProvider/src/main/kotlin/com/nguonc
+          cat << 'EOF' > settings.gradle.kts
+          rootProject.name = "NguonCPlugin"
+          include(":NguonCProvider")
+          EOF
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          EOF
+          cat << 'EOF' > repo.json
+          {
+            "name": "NguonC CloudStream Repository",
+            "description": "Kho tien ich mo rong NguonC (phim.nguonc.com) cho CloudStream 3",
+            "manifestVersion": 1,
+            "pluginLists": [
+              "https://raw.githubusercontent.com/nguyenvanlong-ai/NguonCPlugin/builds/plugins.json"
+            ]
+          }
+          EOF
+          cat << 'EOF' > build.gradle.kts
+          import com.android.build.gradle.BaseExtension
+          import com.lagradost.cloudstream3.gradle.CloudstreamExtension
+          import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+          import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven("https://jitpack.io")
+              }
+              dependencies {
+                  classpath("com.android.tools.build:gradle:8.7.3")
+                  classpath("com.github.recloudstream:gradle:master-SNAPSHOT")
+                  classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0")
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven("https://jitpack.io")
+              }
+          }
+          fun Project.cloudstream(configuration: CloudstreamExtension.() -> Unit) =
+              extensions.getByName<CloudstreamExtension>("cloudstream").configuration()
+          fun Project.android(configuration: BaseExtension.() -> Unit) =
+              extensions.getByName<BaseExtension>("android").configuration()
+          subprojects {
+              apply(plugin = "com.android.library")
+              apply(plugin = "kotlin-android")
+              apply(plugin = "com.lagradost.cloudstream3.gradle")
+              cloudstream {
+                  setRepo(System.getenv("GITHUB_REPOSITORY") ?: "nguyenvanlong-ai/NguonCPlugin")
+              }
+              android {
+                  namespace = "com.nguonc"
+                  defaultConfig {
+                      minSdk = 21
+                      compileSdkVersion(35)
+                      targetSdk = 35
+                  }
+                  compileOptions {
+                      sourceCompatibility = JavaVersion.VERSION_1_8
+                      targetCompatibility = JavaVersion.VERSION_1_8
+                  }
+                  tasks.withType<KotlinJvmCompile> {
+                      compilerOptions {
+                          jvmTarget.set(JvmTarget.JVM_1_8)
+                          freeCompilerArgs.addAll(
+                              "-Xno-call-assertions",
+                              "-Xno-param-assertions",
+                              "-Xno-receiver-assertions"
+                          )
+                      }
+                  }
+              }
+              dependencies {
+                  val implementation by configurations
+                  implementation("com.github.recloudstream.cloudstream:library:-SNAPSHOT")
+                  implementation(kotlin("stdlib"))
+                  implementation("com.github.Blatzar:NiceHttp:0.4.11")
+                  implementation("org.jsoup:jsoup:1.18.3")
+                  implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.1")
+              }
+          }
+          EOF
+          cat << 'EOF' > NguonCProvider/build.gradle.kts
+          version = 1
+          cloudstream {
+              language = "vi"
+              description = "Xem phim Vietsub, Thuyet Minh, Long Tieng toc do cao tu NguonC (phim.nguonc.com)"
+              authors = listOf("NguonC")
+              status = 1
+              tvTypes = listOf(
+                  "Movie",
+                  "TvSeries",
+                  "Anime",
+                  "AsianDrama"
+              )
+              iconUrl = "https://img.nguonc.com/images/img-6f4dad12be11077f1fd5ff0bc0c4f8d72b9708c882e65dc1bdbad6bac79e1455.png"
+          }
+          EOF
+          cat << 'EOF' > NguonCProvider/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest />
+          EOF
+          cat << 'EOF' > NguonCProvider/src/main/kotlin/com/nguonc/NguonCPlugin.kt
+          package com.nguonc
+          import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+          import com.fasterxml.jackson.annotation.JsonProperty
+          import com.lagradost.cloudstream3.*
+          import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+          import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
+          import com.lagradost.cloudstream3.LoadResponse.Companion.addTmdbId
+          import com.lagradost.cloudstream3.network.WebViewResolver
+          import com.lagradost.cloudstream3.plugins.BasePlugin
+          import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
+          import com.lagradost.cloudstream3.utils.*
+          import com.lagradost.cloudstream3.utils.AppUtils.toJson
+          import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
+          import org.jsoup.Jsoup
+          import java.net.URI
+          import java.net.URLEncoder
+          @CloudstreamPlugin
+          class NguonCPlugin : BasePlugin() {
+              override fun load() {
+                  registerMainAPI(NguonCProvider())
+              }
+          }
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCListResponse(
+              @JsonProperty("status") val status: String? = null,
+              @JsonProperty("paginate") val paginate: NguonCPaginate? = null,
+              @JsonProperty("items") val items: List<NguonCFilmItem>? = emptyList()
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCPaginate(
+              @JsonProperty("current_page") val currentPage: Int? = 1,
+              @JsonProperty("total_page") val totalPage: Int? = 1,
+              @JsonProperty("total_items") val totalItems: Int? = 0,
+              @JsonProperty("items_per_page") val itemsPerPage: Int? = 10
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCFilmItem(
+              @JsonProperty("id") val id: String? = null,
+              @JsonProperty("name") val name: String? = null,
+              @JsonProperty("slug") val slug: String? = null,
+              @JsonProperty("original_name") val originalName: String? = null,
+              @JsonProperty("thumb_url") val thumbUrl: String? = null,
+              @JsonProperty("thumb_url_webp") val thumbUrlWebp: String? = null,
+              @JsonProperty("poster_url") val posterUrl: String? = null,
+              @JsonProperty("poster_url_webp") val posterUrlWebp: String? = null,
+              @JsonProperty("description") val description: String? = null,
+              @JsonProperty("total_episodes") val totalEpisodes: Int? = null,
+              @JsonProperty("current_episode") val currentEpisode: String? = null,
+              @JsonProperty("time") val time: String? = null,
+              @JsonProperty("quality") val quality: String? = null,
+              @JsonProperty("language") val language: String? = null,
+              @JsonProperty("director") val director: String? = null,
+              @JsonProperty("casts") val casts: String? = null,
+              @JsonProperty("year") val year: String? = null,
+              @JsonProperty("tmdb") val tmdb: NguonCTmdb? = null,
+              @JsonProperty("imdb") val imdb: NguonCImdb? = null
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCDetailResponse(
+              @JsonProperty("status") val status: String? = null,
+              @JsonProperty("movie") val movie: NguonCMovieDetail? = null
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCMovieDetail(
+              @JsonProperty("id") val id: String? = null,
+              @JsonProperty("name") val name: String? = null,
+              @JsonProperty("slug") val slug: String? = null,
+              @JsonProperty("original_name") val originalName: String? = null,
+              @JsonProperty("thumb_url") val thumbUrl: String? = null,
+              @JsonProperty("thumb_url_webp") val thumbUrlWebp: String? = null,
+              @JsonProperty("poster_url") val posterUrl: String? = null,
+              @JsonProperty("poster_url_webp") val posterUrlWebp: String? = null,
+              @JsonProperty("description") val description: String? = null,
+              @JsonProperty("total_episodes") val totalEpisodes: Int? = null,
+              @JsonProperty("current_episode") val currentEpisode: String? = null,
+              @JsonProperty("time") val time: String? = null,
+              @JsonProperty("quality") val quality: String? = null,
+              @JsonProperty("language") val language: String? = null,
+              @JsonProperty("director") val director: String? = null,
+              @JsonProperty("casts") val casts: String? = null,
+              @JsonProperty("year") val year: String? = null,
+              @JsonProperty("category") val category: Map<String, NguonCCategoryGroup>? = null,
+              @JsonProperty("tmdb") val tmdb: NguonCTmdb? = null,
+              @JsonProperty("imdb") val imdb: NguonCImdb? = null,
+              @JsonProperty("episodes") val episodes: List<NguonCEpisodeServer>? = emptyList()
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCCategoryGroup(
+              @JsonProperty("group") val group: NguonCGroupInfo? = null,
+              @JsonProperty("list") val list: List<NguonCCategoryItem>? = emptyList()
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCGroupInfo(
+              @JsonProperty("id") val id: String? = null,
+              @JsonProperty("name") val name: String? = null
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCCategoryItem(
+              @JsonProperty("id") val id: String? = null,
+              @JsonProperty("name") val name: String? = null
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCTmdb(
+              @JsonProperty("id") val id: Int? = null,
+              @JsonProperty("type") val type: String? = null,
+              @JsonProperty("season") val season: Int? = null,
+              @JsonProperty("url") val url: String? = null
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCImdb(
+              @JsonProperty("id") val id: String? = null,
+              @JsonProperty("url") val url: String? = null
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCEpisodeServer(
+              @JsonProperty("server_name") val serverName: String? = null,
+              @JsonProperty("items") val items: List<NguonCEpisodeItem>? = emptyList()
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCEpisodeItem(
+              @JsonProperty("name") val name: String? = null,
+              @JsonProperty("slug") val slug: String? = null,
+              @JsonProperty("embed") val embed: String? = null,
+              @JsonProperty("m3u8") val m3u8: String? = null
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class NguonCLinkData(
+              @JsonProperty("serverName") val serverName: String,
+              @JsonProperty("episodeName") val episodeName: String? = null,
+              @JsonProperty("m3u8") val m3u8: String? = null,
+              @JsonProperty("embed") val embed: String? = null
+          )
+          @JsonIgnoreProperties(ignoreUnknown = true)
+          data class StreamCObfuscatedData(
+              @JsonProperty("sUb") val sub: String? = null,
+              @JsonProperty("hD") val hd: String? = null
+          )
+          class NguonCProvider : MainAPI() {
+              override var mainUrl = "https://phim.nguonc.com"
+              override var name = "NguonC"
+              override val hasMainPage = true
+              override var lang = "vi"
+              override val hasQuickSearch = true
+              override val hasDownloadSupport = true
+              override val supportedTypes = setOf(
+                  TvType.Movie,
+                  TvType.TvSeries,
+                  TvType.Anime,
+                  TvType.AsianDrama
+              )
+              companion object {
+                  private const val USER_AGENT =
+                      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+              }
+              private val apiHeaders by lazy {
+                  mapOf(
+                      "Accept" to "application/json",
+                      "User-Agent" to USER_AGENT,
+                      "Referer" to "$mainUrl/"
+                  )
+              }
+              override val mainPage = mainPageOf(
+                  "$mainUrl/api/films/phim-moi-cap-nhat?page=" to "Phim Mới Cập Nhật",
+                  "$mainUrl/api/films/danh-sach/phim-bo?page=" to "Phim Bộ",
+                  "$mainUrl/api/films/danh-sach/phim-le?page=" to "Phim Lẻ",
+                  "$mainUrl/api/films/danh-sach/tv-shows?page=" to "TV Shows",
+                  "$mainUrl/api/films/the-loai/hoat-hinh?page=" to "Hoạt Hình",
+                  "$mainUrl/api/films/ngon-ngu/vietsub?page=" to "Phim Vietsub",
+                  "$mainUrl/api/films/ngon-ngu/thuyet-minh?page=" to "Phim Thuyết Minh",
+                  "$mainUrl/api/films/ngon-ngu/long-tieng?page=" to "Phim Lồng Tiếng",
+                  "$mainUrl/api/films/the-loai/hanh-dong?page=" to "Hành Động",
+                  "$mainUrl/api/films/the-loai/tinh-cam?page=" to "Tình Cảm",
+                  "$mainUrl/api/films/the-loai/co-trang?page=" to "Cổ Trang",
+                  "$mainUrl/api/films/the-loai/kinh-di?page=" to "Kinh Dị",
+                  "$mainUrl/api/films/the-loai/khoa-hoc-vien-tuong?page=" to "Khoa Học Viễn Tưởng",
+                  "$mainUrl/api/films/quoc-gia/han-quoc?page=" to "Phim Hàn Quốc",
+                  "$mainUrl/api/films/quoc-gia/trung-quoc?page=" to "Phim Trung Quốc",
+                  "$mainUrl/api/films/quoc-gia/my?page=" to "Phim Âu Mỹ",
+                  "$mainUrl/api/films/quoc-gia/nhat-ban?page=" to "Phim Nhật Bản",
+                  "$mainUrl/api/films/quoc-gia/viet-nam?page=" to "Phim Việt Nam",
+                  "$mainUrl/api/films/nam-phat-hanh/2026?page=" to "Phim Năm 2026",
+                  "$mainUrl/api/films/nam-phat-hanh/2025?page=" to "Phim Năm 2025"
+              )
+              override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+                  val url = "${request.data}$page"
+                  val responseText = app.get(url, headers = apiHeaders).text
+                  val parsed = tryParseJson<NguonCListResponse>(responseText)
+                  val items = parsed?.items?.mapNotNull { it.toSearchResult() } ?: emptyList()
+                  val hasNext = (parsed?.paginate?.currentPage ?: page) < (parsed?.paginate?.totalPage ?: page)
+                  return newHomePageResponse(request.name, items, hasNext = hasNext)
+              }
+              override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
+              override suspend fun search(query: String): List<SearchResponse> {
+                  if (query.isBlank()) return emptyList()
+                  val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+                  val results = mutableListOf<SearchResponse>()
+                  for (page in 1..2) {
+                      val url = "$mainUrl/api/films/search?keyword=$encodedQuery&page=$page"
+                      val responseText = runCatching { app.get(url, headers = apiHeaders).text }.getOrNull() ?: break
+                      val parsed = tryParseJson<NguonCListResponse>(responseText) ?: break
+                      val pageItems = parsed.items?.mapNotNull { it.toSearchResult() } ?: emptyList()
+                      results.addAll(pageItems)
+                      val currentPage = parsed.paginate?.currentPage ?: page
+                      val totalPage = parsed.paginate?.totalPage ?: page
+                      if (currentPage >= totalPage || pageItems.isEmpty()) break
+                  }
+                  return results.distinctBy { it.url }
+              }
+              override suspend fun load(url: String): LoadResponse? {
+                  val slug = extractSlugFromUrl(url)
+                  val apiUrl = "$mainUrl/api/film/$slug"
+                  val responseText = app.get(apiUrl, headers = apiHeaders).text
+                  val detail = tryParseJson<NguonCDetailResponse>(responseText)?.movie ?: return null
+                  val title = detail.name?.takeIf { it.isNotBlank() }
+                      ?: detail.originalName?.takeIf { it.isNotBlank() }
+                      ?: return null
+                  val poster = resolveImage(detail.thumbUrl, detail.thumbUrlWebp, detail.posterUrl, detail.posterUrlWebp)
+                  val background = resolveImage(detail.posterUrl, detail.posterUrlWebp, detail.thumbUrl, detail.thumbUrlWebp)
+                  val cleanPlot = detail.description?.let { Jsoup.parse(it).text().trim() }
+                  val releaseYear = detail.year?.toIntOrNull()
+                  val durationMinutes = parseDurationMinutes(detail.time)
+                  val categoryLists = detail.category?.values.orEmpty()
+                  val formatNames = categoryLists
+                      .filter { it.group?.name?.contains("Định dạng", ignoreCase = true) == true }
+                      .flatMap { it.list.orEmpty() }
+                      .mapNotNull { it.name?.trim() }
+                  val genreTags = categoryLists
+                      .filter { it.group?.name?.contains("Định dạng", ignoreCase = true) != true }
+                      .flatMap { it.list.orEmpty() }
+                      .mapNotNull { it.name?.trim() }
+                      .toMutableList()
+                  detail.quality?.takeIf { it.isNotBlank() }?.let { genreTags.add(0, it) }
+                  detail.language?.takeIf { it.isNotBlank() }?.let { genreTags.add(0, it) }
+                  val castList = detail.casts
+                      ?.split(",")
+                      ?.map { it.trim() }
+                      ?.filter { it.isNotBlank() }
+                      .orEmpty()
+                  val servers = detail.episodes.orEmpty()
+                  val isSeries = isSeriesMovie(detail, formatNames, servers)
+                  if (!isSeries) {
+                      val linkDataList = servers.mapNotNull { server ->
+                          val ep = server.items?.firstOrNull() ?: return@mapNotNull null
+                          NguonCLinkData(
+                              serverName = server.serverName ?: "Vietsub",
+                              episodeName = ep.name ?: "Full",
+                              m3u8 = ep.m3u8?.takeIf { it.isNotBlank() },
+                              embed = ep.embed?.takeIf { it.isNotBlank() }
+                          )
+                      }
+                      return newMovieLoadResponse(
+                          name = title,
+                          url = apiUrl,
+                          type = TvType.Movie,
+                          dataUrl = linkDataList.toJson()
+                      ) {
+                          this.posterUrl = poster
+                          this.backgroundPosterUrl = background
+                          this.year = releaseYear
+                          this.plot = buildPlotWithOriginalName(detail.originalName, detail.director, cleanPlot)
+                          this.tags = genreTags.distinct()
+                          this.duration = durationMinutes
+                          addActors(castList)
+                          addTmdbId(detail.tmdb?.id?.toString())
+                          addImdbId(detail.imdb?.id)
+                      }
+                  } else {
+                      val episodeGroupMap = linkedMapOf<String, MutableList<Pair<String, NguonCEpisodeItem>>>()
+                      for (server in servers) {
+                          val serverName = server.serverName ?: "Vietsub"
+                          for (item in server.items.orEmpty()) {
+                              val key = item.slug?.takeIf { it.isNotBlank() }
+                                  ?: item.name?.trim()
+                                  ?: continue
+                              episodeGroupMap.getOrPut(key) { mutableListOf() }.add(serverName to item)
+                          }
+                      }
+                      val episodesList = episodeGroupMap.entries.mapIndexed { index, (_, serverItems) ->
+                          val firstEp = serverItems.first().second
+                          val epName = firstEp.name?.trim().orEmpty()
+                          val epNum = parseEpisodeNumber(epName) ?: (index + 1)
+                          val linkDataList = serverItems.map { (sName, epItem) ->
+                              NguonCLinkData(
+                                  serverName = sName,
+                                  episodeName = epItem.name,
+                                  m3u8 = epItem.m3u8?.takeIf { it.isNotBlank() },
+                                  embed = epItem.embed?.takeIf { it.isNotBlank() }
+                              )
+                          }
+                          val displayEpName = if (epName.startsWith("Tập", ignoreCase = true)) {
+                              epName
+                          } else if (epName.isNotBlank()) {
+                              "Tập $epName"
+                          } else {
+                              "Tập $epNum"
+                          }
+                          newEpisode(linkDataList.toJson()) {
+                              this.name = displayEpName
+                              this.episode = epNum
+                              this.season = detail.tmdb?.season?.takeIf { it > 0 }
+                          }
+                      }
+                      val tvType = when {
+                          genreTags.any { it.contains("Hoạt Hình", ignoreCase = true) } -> TvType.Anime
+                          else -> TvType.TvSeries
+                      }
+                      return newTvSeriesLoadResponse(
+                          name = title,
+                          url = apiUrl,
+                          type = tvType,
+                          episodes = episodesList
+                      ) {
+                          this.posterUrl = poster
+                          this.backgroundPosterUrl = background
+                          this.year = releaseYear
+                          this.plot = buildPlotWithOriginalName(detail.originalName, detail.director, cleanPlot)
+                          this.tags = genreTags.distinct()
+                          this.duration = durationMinutes
+                          this.showStatus = parseShowStatus(detail.currentEpisode, detail.totalEpisodes)
+                          addActors(castList)
+                          addTmdbId(detail.tmdb?.id?.toString())
+                          addImdbId(detail.imdb?.id)
+                      }
+                  }
+              }
+              override suspend fun loadLinks(
+                  data: String,
+                  isCasting: Boolean,
+                  subtitleCallback: (SubtitleFile) -> Unit,
+                  callback: (ExtractorLink) -> Unit
+              ): Boolean {
+                  val linkItems = tryParseJson<List<NguonCLinkData>>(data).orEmpty()
+                  if (linkItems.isEmpty()) return false
+                  var foundAnyLink = false
+                  for (item in linkItems) {
+                      val sourceLabel = "$name - ${item.serverName}"
+                      val directM3u8 = item.m3u8?.takeIf { it.isNotBlank() }
+                      if (directM3u8 != null) {
+                          emitM3u8Link(
+                              sourceName = sourceLabel,
+                              m3u8Url = directM3u8,
+                              referer = "$mainUrl/",
+                              callback = callback
+                          )
+                          foundAnyLink = true
+                      }
+                      val embedUrl = item.embed?.takeIf { it.isNotBlank() }
+                      if (embedUrl != null) {
+                          val extracted = extractFromEmbedUrl(embedUrl, sourceLabel, subtitleCallback, callback)
+                          if (extracted) {
+                              foundAnyLink = true
+                          }
+                      }
+                  }
+                  return foundAnyLink
+              }
+              private suspend fun extractFromEmbedUrl(
+                  embedUrl: String,
+                  sourceLabel: String,
+                  subtitleCallback: (SubtitleFile) -> Unit,
+                  callback: (ExtractorLink) -> Unit
+              ): Boolean {
+                  val origin = runCatching {
+                      val uri = URI(embedUrl)
+                      "${uri.scheme}://${uri.authority ?: uri.host}"
+                  }.getOrDefault(mainUrl)
+                  val embedHeaders = mapOf(
+                      "User-Agent" to USER_AGENT,
+                      "Referer" to "$mainUrl/",
+                      "Origin" to mainUrl
+                  )
+                  val html = runCatching {
+                      app.get(embedUrl, headers = embedHeaders).text
+                  }.getOrNull()
+                  val slashEscaped = charArrayOf(92.toChar(), '/').concatToString()
+                  if (!html.isNullOrBlank()) {
+                      val obfMatch = Regex("""data-obf=["']([^"']+)["']""", RegexOption.IGNORE_CASE).find(html)
+                      if (obfMatch != null) {
+                          val decodedJson = runCatching {
+                              base64Decode(obfMatch.groupValues[1])
+                          }.getOrNull()
+                          val obfData = decodedJson?.let { tryParseJson<StreamCObfuscatedData>(it) }
+                          val subPath = obfData?.sub?.takeIf { it.isNotBlank() } ?: obfData?.hd?.takeIf { it.isNotBlank() }
+                          if (subPath != null) {
+                              val m3u8Url = if (subPath.startsWith("http")) subPath else "$origin/${subPath.trimStart('/')}"
+                              emitM3u8Link(sourceLabel, m3u8Url, "$origin/", callback)
+                              return true
+                          }
+                      }
+                      if (html.contains("eval(function(p,a,c,k,e,d)")) {
+                          val unpacked = runCatching { getAndUnpack(html) }.getOrNull().orEmpty()
+                          val tokenMatch = Regex("""["'](eyJoIjoi[^"']+)["']""").find(unpacked)
+                          if (tokenMatch != null) {
+                              val m3u8Url = "$origin/${tokenMatch.groupValues[1]}"
+                              emitM3u8Link(sourceLabel, m3u8Url, "$origin/", callback)
+                              return true
+                          }
+                          val unpackedM3u8 = Regex("""(https?://[^"'() ]+[.]m3u8[^"'() ]*)""", RegexOption.IGNORE_CASE)
+                              .find(unpacked)?.groupValues?.get(1)
+                          if (unpackedM3u8 != null) {
+                              emitM3u8Link(sourceLabel, unpackedM3u8.replace(slashEscaped, "/"), "$origin/", callback)
+                              return true
+                          }
+                      }
+                      val directM3u8 = Regex("""(https?://[^"'() ]+[.]m3u8[^"'() ]*)""", RegexOption.IGNORE_CASE)
+                          .find(html)?.groupValues?.get(1)
+                      if (directM3u8 != null) {
+                          emitM3u8Link(sourceLabel, directM3u8.replace(slashEscaped, "/"), "$origin/", callback)
+                          return true
+                      }
+                  }
+                  if (loadExtractor(embedUrl, "$mainUrl/", subtitleCallback, callback)) {
+                      return true
+                  }
+                  val webViewResponse = runCatching {
+                      app.get(
+                          embedUrl,
+                          referer = "$mainUrl/",
+                          headers = embedHeaders,
+                          interceptor = WebViewResolver(
+                              interceptUrl = Regex("""([.]m3u8|get[.]php|master[.]txt)""", RegexOption.IGNORE_CASE),
+                              additionalUrls = listOf(Regex("""([.]m3u8)""", RegexOption.IGNORE_CASE)),
+                              useOkhttp = false,
+                              timeout = 15_000L
+                          )
+                      )
+                  }.getOrNull()
+                  val resolvedUrl = webViewResponse?.url?.takeIf {
+                      it.isNotBlank() && it != embedUrl && (it.contains(".m3u8") || it.contains("get.php"))
+                  }
+                  if (resolvedUrl != null) {
+                      emitM3u8Link(sourceLabel, resolvedUrl, "$origin/", callback)
+                      return true
+                  }
+                  return false
+              }
+              private suspend fun emitM3u8Link(
+                  sourceName: String,
+                  m3u8Url: String,
+                  referer: String,
+                  callback: (ExtractorLink) -> Unit
+              ) {
+                  val headers = mapOf(
+                      "User-Agent" to USER_AGENT,
+                      "Referer" to referer
+                  )
+                  M3u8Helper.generateM3u8(
+                      source = sourceName,
+                      streamUrl = m3u8Url,
+                      referer = referer,
+                      headers = headers
+                  ).forEach(callback)
+              }
+              private fun NguonCFilmItem.toSearchResult(): SearchResponse? {
+                  val slugValue = slug?.takeIf { it.isNotBlank() } ?: return null
+                  val displayTitle = name?.takeIf { it.isNotBlank() }
+                      ?: originalName?.takeIf { it.isNotBlank() }
+                      ?: return null
+                  val image = resolveImage(thumbUrl, thumbUrlWebp, posterUrl, posterUrlWebp)
+                  val itemUrl = "$mainUrl/api/film/$slugValue"
+                  val isDubbed = language?.contains("Thuyết Minh", ignoreCase = true) == true ||
+                          language?.contains("Lồng Tiếng", ignoreCase = true) == true
+                  val isSubbed = language?.contains("Vietsub", ignoreCase = true) == true || !isDubbed
+                  val currentEpNum = parseEpisodeNumber(currentEpisode)
+                  return newAnimeSearchResponse(displayTitle, itemUrl, TvType.TvSeries) {
+                      this.posterUrl = image
+                      this.otherName = originalName
+                      this.quality = getQualityFromString(this@toSearchResult.quality)
+                      addDubStatus(
+                          isDub = isDubbed,
+                          isSub = isSubbed,
+                          episodes = currentEpNum
+                      )
+                  }
+              }
+              private fun extractSlugFromUrl(url: String): String {
+                  val clean = url.substringBefore("?").trimEnd('/')
+                  return clean.substringAfterLast('/')
+              }
+              private fun resolveImage(vararg candidates: String?): String? {
+                  val raw = candidates.firstOrNull { !it.isNullOrBlank() }?.trim() ?: return null
+                  return when {
+                      raw.startsWith("http://") || raw.startsWith("https://") -> raw
+                      raw.startsWith("//") -> "https:$raw"
+                      raw.startsWith("/") -> "$mainUrl$raw"
+                      else -> "$mainUrl/$raw"
+                  }
+              }
+              private fun isSeriesMovie(
+                  detail: NguonCMovieDetail,
+                  formatNames: List<String>,
+                  servers: List<NguonCEpisodeServer>
+              ): Boolean {
+                  if (formatNames.any { it.contains("Phim lẻ", ignoreCase = true) }) return false
+                  if (formatNames.any {
+                          it.contains("Phim bộ", ignoreCase = true) ||
+                                  it.contains("TV Shows", ignoreCase = true)
+                      }
+                  ) return true
+                  if ((detail.totalEpisodes ?: 1) > 1) return true
+                  val maxItemsInServer = servers.maxOfOrNull { it.items?.size ?: 0 } ?: 0
+                  if (maxItemsInServer > 1) return true
+                  val epLabel = detail.currentEpisode.orEmpty()
+                  return epLabel.contains("Tập", ignoreCase = true) && !epLabel.contains("Full", ignoreCase = true)
+              }
+              private fun parseDurationMinutes(timeText: String?): Int? {
+                  if (timeText.isNullOrBlank()) return null
+                  val digits = timeText.takeWhile { it.isDigit() || it.isWhitespace() }.trim()
+                  return digits.toIntOrNull()
+              }
+              private fun parseEpisodeNumber(epText: String?): Int? {
+                  if (epText.isNullOrBlank()) return null
+                  if (epText.contains("Full", ignoreCase = true)) return null
+                  val numStr = StringBuilder()
+                  for (ch in epText) {
+                      if (ch.isDigit()) {
+                          numStr.append(ch)
+                      } else if (numStr.isNotEmpty()) {
+                          break
+                      }
+                  }
+                  return numStr.toString().toIntOrNull()
+              }
+              private fun parseShowStatus(currentEp: String?, totalEp: Int?): ShowStatus {
+                  val text = currentEp.orEmpty()
+                  if (text.contains("Hoàn tất", ignoreCase = true) || text.contains("Full", ignoreCase = true)) {
+                      return ShowStatus.Completed
+                  }
+                  val cur = parseEpisodeNumber(text)
+                  if (cur != null && totalEp != null && totalEp > 0 && cur >= totalEp) {
+                      return ShowStatus.Completed
+                  }
+                  return ShowStatus.Ongoing
+              }
+              private fun buildPlotWithOriginalName(
+                  originalName: String?,
+                  director: String?,
+                  cleanPlot: String?
+              ): String {
+                  val parts = mutableListOf<String>()
+                  if (!originalName.isNullOrBlank()) {
+                      parts.add("Tên gốc: $originalName")
+                  }
+                  if (!director.isNullOrBlank()) {
+                      parts.add("Đạo diễn: $director")
+                  }
+                  if (!cleanPlot.isNullOrBlank()) {
+                      parts.add(cleanPlot)
+                  }
+                  return parts.joinToString(" | ")
+              }
+          }
+          EOF
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -206,30 +685,25 @@ jobs:
             git commit -m "Add NguonC CloudStream plugin source files [skip ci]"
             git push origin HEAD:main
           fi
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
       - name: Setup Gradle 8.12
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.12'
-
       - name: Build CloudStream Plugin
         run: |
           gradle make makePluginsJson
-
       - name: Stage build artifacts
         run: |
           mkdir -p dist
-          find . -path '*/build/*.cs3' -type f -exec cp {} dist/ ;
+          cp NguonCProvider/build/*.cs3 dist/
           cp build/plugins.json dist/plugins.json
           cp repo.json dist/repo.json
           ls -la dist/
-
       - name: Publish to builds branch
         uses: peaceiris/actions-gh-pages@v3
         with:
