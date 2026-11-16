@@ -1,2 +1,2 @@
 rootProject.name = "NguonCPlugin"
-include(":NguonCProvider")
+include(":NguonCProvider", ":KKPhimProvider")

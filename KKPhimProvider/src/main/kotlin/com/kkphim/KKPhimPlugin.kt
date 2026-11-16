@@ -1,0 +1,471 @@
+package com.kkphim
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
+import com.lagradost.cloudstream3.plugins.BasePlugin
+import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
+import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.utils.AppUtils.toJson
+import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
+import org.jsoup.Jsoup
+import java.net.URLDecoder
+import java.net.URLEncoder
+@CloudstreamPlugin
+class KKPhimPlugin : BasePlugin() {
+    override fun load() {
+        registerMainAPI(KKPhimProvider())
+    }
+}
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimListResponse(
+    @JsonProperty("items") val items: List<KKPhimItem>? = null,
+    @JsonProperty("pagination") val pagination: KKPhimPagination? = null,
+    @JsonProperty("data") val data: KKPhimDataWrapper? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimDataWrapper(
+    @JsonProperty("items") val items: List<KKPhimItem>? = emptyList(),
+    @JsonProperty("params") val params: KKPhimParams? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimParams(
+    @JsonProperty("pagination") val pagination: KKPhimPagination? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimPagination(
+    @JsonProperty("totalItems") val totalItems: Int? = 0,
+    @JsonProperty("totalItemsPerPage") val totalItemsPerPage: Int? = 24,
+    @JsonProperty("currentPage") val currentPage: Int? = 1,
+    @JsonProperty("totalPages") val totalPages: Int? = 1
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimItem(
+    @JsonProperty("_id") val id: String? = null,
+    @JsonProperty("name") val name: String? = null,
+    @JsonProperty("slug") val slug: String? = null,
+    @JsonProperty("origin_name") val originName: String? = null,
+    @JsonProperty("type") val type: String? = null,
+    @JsonProperty("poster_url") val posterUrl: String? = null,
+    @JsonProperty("thumb_url") val thumbUrl: String? = null,
+    @JsonProperty("time") val time: String? = null,
+    @JsonProperty("episode_current") val episodeCurrent: String? = null,
+    @JsonProperty("quality") val quality: String? = null,
+    @JsonProperty("lang") val lang: String? = null,
+    @JsonProperty("year") val year: Int? = null,
+    @JsonProperty("tmdb") val tmdb: KKPhimTmdb? = null,
+    @JsonProperty("imdb") val imdb: KKPhimImdb? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimDetailResponse(
+    @JsonProperty("movie") val movie: KKPhimMovieDetail? = null,
+    @JsonProperty("episodes") val episodes: List<KKPhimEpisodeServer>? = emptyList()
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimMovieDetail(
+    @JsonProperty("_id") val id: String? = null,
+    @JsonProperty("name") val name: String? = null,
+    @JsonProperty("slug") val slug: String? = null,
+    @JsonProperty("origin_name") val originName: String? = null,
+    @JsonProperty("content") val content: String? = null,
+    @JsonProperty("type") val type: String? = null,
+    @JsonProperty("status") val status: String? = null,
+    @JsonProperty("poster_url") val posterUrl: String? = null,
+    @JsonProperty("thumb_url") val thumbUrl: String? = null,
+    @JsonProperty("time") val time: String? = null,
+    @JsonProperty("episode_current") val episodeCurrent: String? = null,
+    @JsonProperty("episode_total") val episodeTotal: String? = null,
+    @JsonProperty("quality") val quality: String? = null,
+    @JsonProperty("lang") val lang: String? = null,
+    @JsonProperty("year") val year: Int? = null,
+    @JsonProperty("actor") val actor: List<String>? = emptyList(),
+    @JsonProperty("director") val director: List<String>? = emptyList(),
+    @JsonProperty("category") val category: List<KKPhimNamedTag>? = emptyList(),
+    @JsonProperty("country") val country: List<KKPhimNamedTag>? = emptyList(),
+    @JsonProperty("tmdb") val tmdb: KKPhimTmdb? = null,
+    @JsonProperty("imdb") val imdb: KKPhimImdb? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimNamedTag(
+    @JsonProperty("id") val id: String? = null,
+    @JsonProperty("name") val name: String? = null,
+    @JsonProperty("slug") val slug: String? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimTmdb(
+    @JsonProperty("id") val id: String? = null,
+    @JsonProperty("type") val type: String? = null,
+    @JsonProperty("season") val season: Int? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimImdb(
+    @JsonProperty("id") val id: String? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimEpisodeServer(
+    @JsonProperty("server_name") val serverName: String? = null,
+    @JsonProperty("server_data") val serverData: List<KKPhimEpisodeData>? = emptyList()
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimEpisodeData(
+    @JsonProperty("name") val name: String? = null,
+    @JsonProperty("slug") val slug: String? = null,
+    @JsonProperty("filename") val filename: String? = null,
+    @JsonProperty("link_embed") val linkEmbed: String? = null,
+    @JsonProperty("link_m3u8") val linkM3u8: String? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KKPhimLinkItem(
+    @JsonProperty("serverName") val serverName: String,
+    @JsonProperty("m3u8") val m3u8: String? = null,
+    @JsonProperty("embed") val embed: String? = null
+)
+class KKPhimProvider : MainAPI() {
+    override var mainUrl = "https://phimapi.com"
+    override var name = "KKPhim"
+    override val hasMainPage = true
+    override var lang = "vi"
+    override val hasQuickSearch = true
+    override val hasDownloadSupport = true
+    override val supportedTypes = setOf(
+        TvType.Movie,
+        TvType.TvSeries,
+        TvType.Anime,
+        TvType.AsianDrama
+    )
+    companion object {
+        private const val CDN_IMAGE = "https://phimimg.com"
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    }
+    private val apiHeaders by lazy {
+        mapOf(
+            "Accept" to "application/json",
+            "User-Agent" to USER_AGENT,
+            "Referer" to "$mainUrl/"
+        )
+    }
+    override val mainPage = mainPageOf(
+        "$mainUrl/danh-sach/phim-moi-cap-nhat-v3?page=" to "Phim Mới Cập Nhật",
+        "$mainUrl/v1/api/danh-sach/phim-bo?limit=24&page=" to "Phim Bộ",
+        "$mainUrl/v1/api/danh-sach/phim-le?limit=24&page=" to "Phim Lẻ",
+        "$mainUrl/v1/api/danh-sach/hoat-hinh?limit=24&page=" to "Hoạt Hình",
+        "$mainUrl/v1/api/danh-sach/tv-shows?limit=24&page=" to "TV Shows",
+        "$mainUrl/v1/api/danh-sach/phim-vietsub?limit=24&page=" to "Phim Vietsub",
+        "$mainUrl/v1/api/danh-sach/phim-thuyet-minh?limit=24&page=" to "Phim Thuyết Minh",
+        "$mainUrl/v1/api/danh-sach/phim-long-tieng?limit=24&page=" to "Phim Lồng Tiếng",
+        "$mainUrl/v1/api/the-loai/hanh-dong?limit=24&page=" to "Hành Động",
+        "$mainUrl/v1/api/the-loai/tinh-cam?limit=24&page=" to "Tình Cảm",
+        "$mainUrl/v1/api/the-loai/co-trang?limit=24&page=" to "Cổ Trang",
+        "$mainUrl/v1/api/the-loai/kinh-di?limit=24&page=" to "Kinh Dị",
+        "$mainUrl/v1/api/the-loai/vien-tuong?limit=24&page=" to "Viễn Tưởng",
+        "$mainUrl/v1/api/the-loai/hai-huoc?limit=24&page=" to "Hài Hước",
+        "$mainUrl/v1/api/quoc-gia/han-quoc?limit=24&page=" to "Phim Hàn Quốc",
+        "$mainUrl/v1/api/quoc-gia/trung-quoc?limit=24&page=" to "Phim Trung Quốc",
+        "$mainUrl/v1/api/quoc-gia/au-my?limit=24&page=" to "Phim Âu Mỹ",
+        "$mainUrl/v1/api/quoc-gia/nhat-ban?limit=24&page=" to "Phim Nhật Bản",
+        "$mainUrl/v1/api/quoc-gia/viet-nam?limit=24&page=" to "Phim Việt Nam",
+        "$mainUrl/v1/api/nam/2026?limit=24&page=" to "Phim Năm 2026"
+    )
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        val url = "${request.data}$page"
+        val responseText = app.get(url, headers = apiHeaders).text
+        val parsed = tryParseJson<KKPhimListResponse>(responseText)
+        val rawItems = parsed?.items ?: parsed?.data?.items.orEmpty()
+        val pag = parsed?.pagination ?: parsed?.data?.params?.pagination
+        val results = rawItems.mapNotNull { it.toSearchResult() }
+        val hasNext = (pag?.currentPage ?: page) < (pag?.totalPages ?: page)
+        return newHomePageResponse(request.name, results, hasNext = hasNext)
+    }
+    override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
+    override suspend fun search(query: String): List<SearchResponse> {
+        if (query.isBlank()) return emptyList()
+        val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+        val results = mutableListOf<SearchResponse>()
+        for (page in 1..2) {
+            val url = "$mainUrl/v1/api/tim-kiem?keyword=$encodedQuery&limit=24&page=$page"
+            val responseText = runCatching { app.get(url, headers = apiHeaders).text }.getOrNull() ?: break
+            val parsed = tryParseJson<KKPhimListResponse>(responseText) ?: break
+            val rawItems = parsed.items ?: parsed.data?.items.orEmpty()
+            val pageItems = rawItems.mapNotNull { it.toSearchResult() }
+            results.addAll(pageItems)
+            val pag = parsed.pagination ?: parsed.data?.params?.pagination
+            val currentPage = pag?.currentPage ?: page
+            val totalPages = pag?.totalPages ?: page
+            if (currentPage >= totalPages || pageItems.isEmpty()) break
+        }
+        return results.distinctBy { it.url }
+    }
+    override suspend fun load(url: String): LoadResponse? {
+        val slug = extractSlugFromUrl(url)
+        val apiUrl = "$mainUrl/phim/$slug"
+        val responseText = app.get(apiUrl, headers = apiHeaders).text
+        val parsed = tryParseJson<KKPhimDetailResponse>(responseText) ?: return null
+        val detail = parsed.movie ?: return null
+        val title = detail.name?.takeIf { it.isNotBlank() }
+            ?: detail.originName?.takeIf { it.isNotBlank() }
+            ?: return null
+        val poster = resolveImage(detail.posterUrl, detail.thumbUrl)
+        val background = resolveImage(detail.thumbUrl, detail.posterUrl)
+        val cleanPlot = detail.content?.let { Jsoup.parse(it).text().trim() }
+        val durationMinutes = parseDurationMinutes(detail.time)
+        val genreTags = mutableListOf<String>()
+        detail.quality?.takeIf { it.isNotBlank() }?.let { genreTags.add(it) }
+        detail.lang?.takeIf { it.isNotBlank() }?.let { genreTags.add(it) }
+        detail.category?.mapNotNull { it.name?.trim() }?.let { genreTags.addAll(it) }
+        detail.country?.mapNotNull { it.name?.trim() }?.let { genreTags.addAll(it) }
+        val castList = detail.actor
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() && !it.contains("Đang cập nhật", ignoreCase = true) }
+            .orEmpty()
+        val directorText = detail.director
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() && !it.contains("Đang cập nhật", ignoreCase = true) }
+            ?.joinToString(", ")
+        val servers = parsed.episodes.orEmpty()
+        val isSeries = isSeriesMovie(detail, servers)
+        if (!isSeries) {
+            val linkDataList = servers.mapNotNull { server ->
+                val ep = server.serverData?.firstOrNull() ?: return@mapNotNull null
+                KKPhimLinkItem(
+                    serverName = server.serverName ?: "Vietsub",
+                    m3u8 = ep.linkM3u8?.takeIf { it.isNotBlank() },
+                    embed = ep.linkEmbed?.takeIf { it.isNotBlank() }
+                )
+            }
+            return newMovieLoadResponse(
+                name = title,
+                url = apiUrl,
+                type = TvType.Movie,
+                dataUrl = linkDataList.toJson()
+            ) {
+                this.posterUrl = poster
+                this.backgroundPosterUrl = background
+                this.year = detail.year
+                this.plot = buildPlotWithOriginalName(detail.originName, directorText, cleanPlot)
+                this.tags = genreTags.distinct()
+                this.duration = durationMinutes
+                addActors(castList)
+                addImdbId(detail.imdb?.id)
+            }
+        } else {
+            val episodeGroupMap = linkedMapOf<String, MutableList<Pair<String, KKPhimEpisodeData>>>()
+            for (server in servers) {
+                val serverName = server.serverName ?: "Vietsub"
+                for (item in server.serverData.orEmpty()) {
+                    val key = item.slug?.takeIf { it.isNotBlank() }
+                        ?: item.name?.trim()
+                        ?: continue
+                    episodeGroupMap.getOrPut(key) { mutableListOf() }.add(serverName to item)
+                }
+            }
+            val episodesList = episodeGroupMap.entries.mapIndexed { index, (_, serverItems) ->
+                val firstEp = serverItems.first().second
+                val epName = firstEp.name?.trim().orEmpty()
+                val epNum = parseEpisodeNumber(epName) ?: (index + 1)
+                val linkDataList = serverItems.map { (sName, epItem) ->
+                    KKPhimLinkItem(
+                        serverName = sName,
+                        m3u8 = epItem.linkM3u8?.takeIf { it.isNotBlank() },
+                        embed = epItem.linkEmbed?.takeIf { it.isNotBlank() }
+                    )
+                }
+                val displayEpName = if (epName.startsWith("Tập", ignoreCase = true)) {
+                    epName
+                } else if (epName.isNotBlank()) {
+                    "Tập $epName"
+                } else {
+                    "Tập $epNum"
+                }
+                newEpisode(linkDataList) {
+                    this.name = displayEpName
+                    this.episode = epNum
+                    this.season = detail.tmdb?.season?.takeIf { it > 0 }
+                }
+            }
+            val tvType = when {
+                detail.type.equals("hoathinh", ignoreCase = true) ||
+                        genreTags.any { it.contains("Hoạt Hình", ignoreCase = true) } -> TvType.Anime
+                else -> TvType.TvSeries
+            }
+            return newTvSeriesLoadResponse(
+                name = title,
+                url = apiUrl,
+                type = tvType,
+                episodes = episodesList
+            ) {
+                this.posterUrl = poster
+                this.backgroundPosterUrl = background
+                this.year = detail.year
+                this.plot = buildPlotWithOriginalName(detail.originName, directorText, cleanPlot)
+                this.tags = genreTags.distinct()
+                this.duration = durationMinutes
+                this.showStatus = parseShowStatus(detail.status, detail.episodeCurrent, detail.episodeTotal)
+                addActors(castList)
+                addImdbId(detail.imdb?.id)
+            }
+        }
+    }
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val jsonStart = data.indexOf('[')
+        val cleanData = if (jsonStart >= 0) data.substring(jsonStart) else data
+        val linkItems = tryParseJson<List<KKPhimLinkItem>>(cleanData).orEmpty()
+        if (linkItems.isEmpty()) return false
+        var foundAnyLink = false
+        for (item in linkItems) {
+            val sourceLabel = "$name - ${item.serverName}"
+            var m3u8Url = item.m3u8?.takeIf { it.isNotBlank() }
+            if (m3u8Url == null && !item.embed.isNullOrBlank()) {
+                val embedUrl = item.embed
+                if (embedUrl.contains("url=")) {
+                    val extracted = embedUrl.substringAfter("url=").substringBefore("&")
+                    val decoded = runCatching { URLDecoder.decode(extracted, "UTF-8") }.getOrDefault(extracted)
+                    if (decoded.startsWith("http")) {
+                        m3u8Url = decoded
+                    }
+                }
+            }
+            if (m3u8Url != null) {
+                val headers = mapOf(
+                    "User-Agent" to USER_AGENT,
+                    "Referer" to "$mainUrl/"
+                )
+                val generated = runCatching {
+                    M3u8Helper.generateM3u8(
+                        source = sourceLabel,
+                        streamUrl = m3u8Url,
+                        referer = "$mainUrl/",
+                        headers = headers,
+                        name = sourceLabel
+                    )
+                }.getOrNull().orEmpty()
+                if (generated.isNotEmpty()) {
+                    generated.forEach(callback)
+                } else {
+                    callback.invoke(
+                        newExtractorLink(
+                            source = sourceLabel,
+                            name = sourceLabel,
+                            url = m3u8Url,
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            this.referer = "$mainUrl/"
+                            this.quality = Qualities.P1080.value
+                            this.headers = headers
+                        }
+                    )
+                }
+                foundAnyLink = true
+            } else if (!item.embed.isNullOrBlank()) {
+                if (loadExtractor(item.embed, "$mainUrl/", subtitleCallback, callback)) {
+                    foundAnyLink = true
+                }
+            }
+        }
+        return foundAnyLink
+    }
+    private fun KKPhimItem.toSearchResult(): SearchResponse? {
+        val slugValue = slug?.takeIf { it.isNotBlank() } ?: return null
+        val displayTitle = name?.takeIf { it.isNotBlank() }
+            ?: originName?.takeIf { it.isNotBlank() }
+            ?: return null
+        val image = resolveImage(posterUrl, thumbUrl)
+        val itemUrl = "$mainUrl/phim/$slugValue"
+        val isDubbed = lang?.contains("Thuyết Minh", ignoreCase = true) == true ||
+                lang?.contains("Lồng Tiếng", ignoreCase = true) == true
+        val isSubbed = lang?.contains("Vietsub", ignoreCase = true) == true || !isDubbed
+        val currentEpNum = parseEpisodeNumber(episodeCurrent)
+        return newAnimeSearchResponse(displayTitle, itemUrl, TvType.TvSeries) {
+            this.posterUrl = image
+            this.otherName = originName
+            this.quality = getQualityFromString(this@toSearchResult.quality)
+            addDubStatus(
+                dubExist = isDubbed,
+                subExist = isSubbed,
+                dubEpisodes = if (isDubbed) currentEpNum else null,
+                subEpisodes = if (isSubbed) currentEpNum else null
+            )
+        }
+    }
+    private fun extractSlugFromUrl(url: String): String {
+        val clean = url.substringBefore("?").trimEnd('/')
+        return clean.substringAfterLast('/')
+    }
+    private fun resolveImage(vararg candidates: String?): String? {
+        val raw = candidates.firstOrNull { !it.isNullOrBlank() }?.trim() ?: return null
+        return when {
+            raw.startsWith("http://") || raw.startsWith("https://") -> raw
+            raw.startsWith("//") -> "https:$raw"
+            raw.startsWith("/") -> "$CDN_IMAGE$raw"
+            else -> "$CDN_IMAGE/$raw"
+        }
+    }
+    private fun isSeriesMovie(
+        detail: KKPhimMovieDetail,
+        servers: List<KKPhimEpisodeServer>
+    ): Boolean {
+        if (detail.type.equals("single", ignoreCase = true)) return false
+        if (detail.type.equals("series", ignoreCase = true) ||
+            detail.type.equals("hoathinh", ignoreCase = true) ||
+            detail.type.equals("tvshows", ignoreCase = true)
+        ) return true
+        val maxItems = servers.maxOfOrNull { it.serverData?.size ?: 0 } ?: 0
+        if (maxItems > 1) return true
+        val epLabel = detail.episodeCurrent.orEmpty()
+        return epLabel.contains("Tập", ignoreCase = true) && !epLabel.contains("Full", ignoreCase = true)
+    }
+    private fun parseDurationMinutes(timeText: String?): Int? {
+        if (timeText.isNullOrBlank()) return null
+        val digits = timeText.takeWhile { it.isDigit() || it.isWhitespace() }.trim()
+        return digits.toIntOrNull()
+    }
+    private fun parseEpisodeNumber(epText: String?): Int? {
+        if (epText.isNullOrBlank()) return null
+        if (epText.contains("Full", ignoreCase = true)) return null
+        val numStr = StringBuilder()
+        for (ch in epText) {
+            if (ch.isDigit()) {
+                numStr.append(ch)
+            } else if (numStr.isNotEmpty()) {
+                break
+            }
+        }
+        return numStr.toString().toIntOrNull()
+    }
+    private fun parseShowStatus(status: String?, currentEp: String?, totalEp: String?): ShowStatus {
+        if (status.equals("completed", ignoreCase = true)) return ShowStatus.Completed
+        val text = currentEp.orEmpty()
+        if (text.contains("Hoàn tất", ignoreCase = true) || text.contains("Full", ignoreCase = true)) {
+            return ShowStatus.Completed
+        }
+        val cur = parseEpisodeNumber(text)
+        val tot = parseEpisodeNumber(totalEp)
+        if (cur != null && tot != null && tot > 0 && cur >= tot) {
+            return ShowStatus.Completed
+        }
+        return ShowStatus.Ongoing
+    }
+    private fun buildPlotWithOriginalName(
+        originalName: String?,
+        director: String?,
+        cleanPlot: String?
+    ): String {
+        val parts = mutableListOf<String>()
+        if (!originalName.isNullOrBlank()) {
+            parts.add("Tên gốc: $originalName")
+        }
+        if (!director.isNullOrBlank()) {
+            parts.add("Đạo diễn: $director")
+        }
+        if (!cleanPlot.isNullOrBlank()) {
+            parts.add(cleanPlot)
+        }
+        return parts.joinToString(" | ")
+    }
+}

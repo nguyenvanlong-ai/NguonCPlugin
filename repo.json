@@ -1,6 +1,6 @@
 {
-  "name": "NguonC CloudStream Repository",
-  "description": "Kho tien ich mo rong NguonC (phim.nguonc.com) cho CloudStream 3",
+  "name": "NguonC & KKPhim CloudStream Repository",
+  "description": "Kho tien ich mo rong NguonC (phim.nguonc.com) va KKPhim (phimapi.com) cho CloudStream 3",
   "manifestVersion": 1,
   "pluginLists": [
     "https://raw.githubusercontent.com/nguyenvanlong-ai/NguonCPlugin/builds/plugins.json"
