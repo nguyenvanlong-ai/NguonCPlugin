@@ -314,7 +314,7 @@ class NguonCProvider : MainAPI() {
                 } else {
                     "Tập $epNum"
                 }
-                newEpisode(linkDataList.toJson(), fix = false) {
+                newEpisode(linkDataList) {
                     this.name = displayEpName
                     this.episode = epNum
                     this.season = detail.tmdb?.season?.takeIf { it > 0 }
