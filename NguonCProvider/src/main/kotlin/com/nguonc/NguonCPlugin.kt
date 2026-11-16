@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
-import com.lagradost.cloudstream3.LoadResponse.Companion.addTmdbId
 import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
@@ -261,7 +260,6 @@ class NguonCProvider : MainAPI() {
                 this.tags = genreTags.distinct()
                 this.duration = durationMinutes
                 addActors(castList)
-                addTmdbId(detail.tmdb?.id?.toString())
                 addImdbId(detail.imdb?.id)
             }
         } else {
@@ -318,7 +316,6 @@ class NguonCProvider : MainAPI() {
                 this.duration = durationMinutes
                 this.showStatus = parseShowStatus(detail.currentEpisode, detail.totalEpisodes)
                 addActors(castList)
-                addTmdbId(detail.tmdb?.id?.toString())
                 addImdbId(detail.imdb?.id)
             }
         }
@@ -467,9 +464,10 @@ class NguonCProvider : MainAPI() {
             this.otherName = originalName
             this.quality = getQualityFromString(this@toSearchResult.quality)
             addDubStatus(
-                isDub = isDubbed,
-                isSub = isSubbed,
-                episodes = currentEpNum
+                dubExist = isDubbed,
+                subExist = isSubbed,
+                dubEpisodes = if (isDubbed) currentEpNum else null,
+                subEpisodes = if (isSubbed) currentEpNum else null
             )
         }
     }
