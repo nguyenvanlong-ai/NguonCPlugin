@@ -10,9 +10,14 @@ import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
+import com.lagradost.nicehttp.JsonAsString
 import org.jsoup.Jsoup
 import java.net.URI
 import java.net.URLEncoder
+import java.security.MessageDigest
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 @CloudstreamPlugin
 class NguonCPlugin : BasePlugin() {
     override fun load() {
@@ -133,6 +138,23 @@ data class NguonCLinkData(
 data class StreamCObfuscatedData(
     @JsonProperty("sUb") val sub: String? = null,
     @JsonProperty("hD") val hd: String? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class StreamCBootstrapMeta(
+    @JsonProperty("api") val api: String? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class StreamCBootstrapResponse(
+    @JsonProperty("video") val video: String? = null,
+    @JsonProperty("preissued") val preissued: StreamCPreissued? = null,
+    @JsonProperty("format") val format: String? = null,
+    @JsonProperty("iv") val iv: String? = null,
+    @JsonProperty("data") val data: String? = null
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class StreamCPreissued(
+    @JsonProperty("playlist") val playlist: String? = null,
+    @JsonProperty("playlistFormat") val playlistFormat: String? = null
 )
 class NguonCProvider : MainAPI() {
     override var mainUrl = "https://phim.nguonc.com"
@@ -292,7 +314,7 @@ class NguonCProvider : MainAPI() {
                 } else {
                     "Tập $epNum"
                 }
-                newEpisode(linkDataList.toJson()) {
+                newEpisode(linkDataList.toJson(), fix = false) {
                     this.name = displayEpName
                     this.episode = epNum
                     this.season = detail.tmdb?.season?.takeIf { it > 0 }
@@ -326,8 +348,15 @@ class NguonCProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val linkItems = tryParseJson<List<NguonCLinkData>>(data).orEmpty()
-        if (linkItems.isEmpty()) return false
+        val jsonStart = data.indexOf('[')
+        val cleanData = if (jsonStart >= 0) data.substring(jsonStart) else data
+        val linkItems = tryParseJson<List<NguonCLinkData>>(cleanData).orEmpty()
+        if (linkItems.isEmpty()) {
+            if (data.startsWith("http")) {
+                return extractFromEmbedUrl(data, name, subtitleCallback, callback)
+            }
+            return false
+        }
         var foundAnyLink = false
         for (item in linkItems) {
             val sourceLabel = "$name - ${item.serverName}"
@@ -337,6 +366,7 @@ class NguonCProvider : MainAPI() {
                     sourceName = sourceLabel,
                     m3u8Url = directM3u8,
                     referer = "$mainUrl/",
+                    origin = mainUrl,
                     callback = callback
                 )
                 foundAnyLink = true
@@ -351,6 +381,59 @@ class NguonCProvider : MainAPI() {
         }
         return foundAnyLink
     }
+    private suspend fun tryBootstrapStreamC(
+        apiUrl: String,
+        embedUrl: String,
+        origin: String,
+        sourceLabel: String,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val postHeaders = mapOf(
+            "User-Agent" to USER_AGENT,
+            "Accept" to "application/json, text/plain, */*",
+            "Origin" to origin,
+            "Referer" to embedUrl
+        )
+        val payloadJson = """{"action":"bootstrap","referrer":"$mainUrl/","frame_origins":["$mainUrl"],"request_grant":true}"""
+        val respText = runCatching {
+            app.post(
+                apiUrl,
+                headers = postHeaders,
+                referer = embedUrl,
+                json = JsonAsString(payloadJson)
+            ).text
+        }.getOrNull() ?: return false
+        var bootResp = tryParseJson<StreamCBootstrapResponse>(respText) ?: return false
+        if (bootResp.format == "aesgcm-v1" && !bootResp.iv.isNullOrBlank() && !bootResp.data.isNullOrBlank()) {
+            val decrypted = decryptBootstrapAesGcm(bootResp.iv!!, bootResp.data!!, apiUrl)
+            if (!decrypted.isNullOrBlank()) {
+                bootResp = tryParseJson<StreamCBootstrapResponse>(decrypted) ?: bootResp
+            }
+        }
+        val playlistUrl = bootResp.preissued?.playlist?.takeIf { it.isNotBlank() } ?: return false
+        emitM3u8Link(
+            sourceName = sourceLabel,
+            m3u8Url = playlistUrl,
+            referer = embedUrl,
+            origin = origin,
+            callback = callback
+        )
+        return true
+    }
+    private fun decryptBootstrapAesGcm(ivHex: String, dataB64: String, apiHref: String): String? {
+        return runCatching {
+            val nl = 10.toChar()
+            val aad = "stream-bootstrap-v1$nl$apiHref".toByteArray(Charsets.UTF_8)
+            val keyBytes = MessageDigest.getInstance("SHA-256").digest(aad)
+            val ivBytes = ivHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val cipherBytes = base64DecodeArray(dataB64)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val spec = GCMParameterSpec(128, ivBytes)
+            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), spec)
+            cipher.updateAAD(aad)
+            String(cipher.doFinal(cipherBytes), Charsets.UTF_8)
+        }.getOrNull()
+    }
     private suspend fun extractFromEmbedUrl(
         embedUrl: String,
         sourceLabel: String,
@@ -361,6 +444,9 @@ class NguonCProvider : MainAPI() {
             val uri = URI(embedUrl)
             "${uri.scheme}://${uri.authority ?: uri.host}"
         }.getOrDefault(mainUrl)
+        if (tryBootstrapStreamC(embedUrl, embedUrl, origin, sourceLabel, callback)) {
+            return true
+        }
         val embedHeaders = mapOf(
             "User-Agent" to USER_AGENT,
             "Referer" to "$mainUrl/",
@@ -371,6 +457,15 @@ class NguonCProvider : MainAPI() {
         }.getOrNull()
         val slashEscaped = charArrayOf(92.toChar(), '/').concatToString()
         if (!html.isNullOrBlank()) {
+            val bootScript = Jsoup.parse(html).selectFirst("script#stream-bootstrap")?.data()
+            if (!bootScript.isNullOrBlank()) {
+                val apiHref = tryParseJson<StreamCBootstrapMeta>(bootScript)?.api
+                if (!apiHref.isNullOrBlank() && apiHref != embedUrl) {
+                    if (tryBootstrapStreamC(apiHref, embedUrl, origin, sourceLabel, callback)) {
+                        return true
+                    }
+                }
+            }
             val obfMatch = Regex("""data-obf=["']([^"']+)["']""", RegexOption.IGNORE_CASE).find(html)
             if (obfMatch != null) {
                 val decodedJson = runCatching {
@@ -379,8 +474,9 @@ class NguonCProvider : MainAPI() {
                 val obfData = decodedJson?.let { tryParseJson<StreamCObfuscatedData>(it) }
                 val subPath = obfData?.sub?.takeIf { it.isNotBlank() } ?: obfData?.hd?.takeIf { it.isNotBlank() }
                 if (subPath != null) {
-                    val m3u8Url = if (subPath.startsWith("http")) subPath else "$origin/${subPath.trimStart('/')}"
-                    emitM3u8Link(sourceLabel, m3u8Url, "$origin/", callback)
+                    val rawUrl = if (subPath.startsWith("http")) subPath else "$origin/${subPath.trimStart('/')}"
+                    val m3u8Url = if (rawUrl.endsWith(".m3u8")) rawUrl else "$rawUrl.m3u8"
+                    emitM3u8Link(sourceLabel, m3u8Url, embedUrl, origin, callback)
                     return true
                 }
             }
@@ -389,20 +485,20 @@ class NguonCProvider : MainAPI() {
                 val tokenMatch = Regex("""["'](eyJoIjoi[^"']+)["']""").find(unpacked)
                 if (tokenMatch != null) {
                     val m3u8Url = "$origin/${tokenMatch.groupValues[1]}"
-                    emitM3u8Link(sourceLabel, m3u8Url, "$origin/", callback)
+                    emitM3u8Link(sourceLabel, m3u8Url, embedUrl, origin, callback)
                     return true
                 }
                 val unpackedM3u8 = Regex("""(https?://[^"'() ]+[.]m3u8[^"'() ]*)""", RegexOption.IGNORE_CASE)
                     .find(unpacked)?.groupValues?.get(1)
                 if (unpackedM3u8 != null) {
-                    emitM3u8Link(sourceLabel, unpackedM3u8.replace(slashEscaped, "/"), "$origin/", callback)
+                    emitM3u8Link(sourceLabel, unpackedM3u8.replace(slashEscaped, "/"), embedUrl, origin, callback)
                     return true
                 }
             }
             val directM3u8 = Regex("""(https?://[^"'() ]+[.]m3u8[^"'() ]*)""", RegexOption.IGNORE_CASE)
                 .find(html)?.groupValues?.get(1)
             if (directM3u8 != null) {
-                emitM3u8Link(sourceLabel, directM3u8.replace(slashEscaped, "/"), "$origin/", callback)
+                emitM3u8Link(sourceLabel, directM3u8.replace(slashEscaped, "/"), embedUrl, origin, callback)
                 return true
             }
         }
@@ -415,18 +511,18 @@ class NguonCProvider : MainAPI() {
                 referer = "$mainUrl/",
                 headers = embedHeaders,
                 interceptor = WebViewResolver(
-                    interceptUrl = Regex("""([.]m3u8|get[.]php|master[.]txt)""", RegexOption.IGNORE_CASE),
-                    additionalUrls = listOf(Regex("""([.]m3u8)""", RegexOption.IGNORE_CASE)),
+                    interceptUrl = Regex("""([.]m3u8|conf[.]php|get[.]php|master[.]txt)""", RegexOption.IGNORE_CASE),
+                    additionalUrls = listOf(Regex("""([.]m3u8|conf[.]php)""", RegexOption.IGNORE_CASE)),
                     useOkhttp = false,
                     timeout = 15_000L
                 )
             )
         }.getOrNull()
         val resolvedUrl = webViewResponse?.url?.takeIf {
-            it.isNotBlank() && it != embedUrl && (it.contains(".m3u8") || it.contains("get.php"))
+            it.isNotBlank() && it != embedUrl && (it.contains(".m3u8") || it.contains("conf.php") || it.contains("get.php"))
         }
         if (resolvedUrl != null) {
-            emitM3u8Link(sourceLabel, resolvedUrl, "$origin/", callback)
+            emitM3u8Link(sourceLabel, resolvedUrl, embedUrl, origin, callback)
             return true
         }
         return false
@@ -435,18 +531,29 @@ class NguonCProvider : MainAPI() {
         sourceName: String,
         m3u8Url: String,
         referer: String,
+        origin: String? = null,
         callback: (ExtractorLink) -> Unit
     ) {
-        val headers = mapOf(
+        val headers = mutableMapOf(
             "User-Agent" to USER_AGENT,
-            "Referer" to referer
+            "Referer" to referer,
+            "Accept" to "*/*"
         )
-        M3u8Helper.generateM3u8(
-            source = sourceName,
-            streamUrl = m3u8Url,
-            referer = referer,
-            headers = headers
-        ).forEach(callback)
+        if (!origin.isNullOrBlank()) {
+            headers["Origin"] = origin
+        }
+        callback.invoke(
+            newExtractorLink(
+                source = sourceName,
+                name = sourceName,
+                url = m3u8Url,
+                type = ExtractorLinkType.M3U8
+            ) {
+                this.referer = referer
+                this.quality = Qualities.P1080.value
+                this.headers = headers
+            }
+        )
     }
     private fun NguonCFilmItem.toSearchResult(): SearchResponse? {
         val slugValue = slug?.takeIf { it.isNotBlank() } ?: return null

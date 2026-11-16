@@ -1,4 +1,4 @@
-version = 1
+version = 2
 cloudstream {
     language = "vi"
     description = "Xem phim Vietsub, Thuyet Minh, Long Tieng toc do cao tu NguonC (phim.nguonc.com)"
